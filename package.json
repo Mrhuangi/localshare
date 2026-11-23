@@ -1,0 +1,1 @@
+{"dependencies":{"ws":"^8.18.0"},"description":"局域网文件传送，像 AirDrop 一样简单。","engines":{"node":">=18"},"license":"MIT","main":"server.js","name":"localshare","scripts":{"start":"node server.js","test":"node test/signaling.test.js && node test/relay.test.js"},"type":"commonjs","version":"2.0.0"}
