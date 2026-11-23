@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LocalShare</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --glass: rgba(255,255,255,0.72);
+    --text: #1d1d1f;
+    --text-2: #6e6e73;
+    --text-3: #86868b;
+    --line: rgba(0,0,0,0.06);
+    --fill: rgba(0,0,0,0.04);
+    --fill-hover: rgba(0,0,0,0.07);
+    --accent: #0071e3;
+    --accent-text: #0060c9;
+    --green: #34c759;
+    --red: #ff3b30;
+    --shadow: 0 8px 32px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.05);
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: #1c1c1e;
+      --glass: rgba(28,28,30,0.72);
+      --text: #f5f5f7;
+      --text-2: #aeaeb2;
+      --text-3: #8e8e93;
+      --line: rgba(255,255,255,0.08);
+      --fill: rgba(255,255,255,0.06);
+      --fill-hover: rgba(255,255,255,0.10);
+      --accent: #2997ff;
+      --accent-text: #2997ff;
+      --shadow: 0 8px 32px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.4);
+    }
+  }
+
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .brand-sub { font-size: 12px; color: var(--text-3); }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+  .status-dot.on { background: var(--green); }
+  .status-dot.wait { background: #ff9f0a; }
+  .me { display: flex; align-items: center; gap: 8px; cursor: pointer; border-radius: 999px; padding: 3px 10px 3px 3px; }
+  .me:hover { background: var(--fill); }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 600;
+  }
+  .me-name { font-size: 13px; font-weight: 500; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Layout */
+  main { flex: 1; display: grid; grid-template-columns: 272px 1fr; min-height: 0; }
+  @media (max-width: 720px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  }
+
+  /* Peers */
+  aside { border-right: 1px solid var(--line); padding: 16px 12px; overflow-y: auto; }
+  @media (max-width: 720px) { aside { border-right: none; border-bottom: 1px solid var(--line); } }
+  .section-label { font-size: 12px; color: var(--text-3); padding: 0 8px 8px; }
+  .peer {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 8px; border-radius: 12px; cursor: pointer;
+  }
+  .peer:hover { background: var(--fill); }
+  .peer.selected { background: var(--fill-hover); }
+  .peer .avatar { width: 34px; height: 34px; font-size: 15px; }
+  .peer-info { flex: 1; min-width: 0; }
+  .peer-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .peer-meta { font-size: 12px; color: var(--text-3); }
+  .peer.drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .peers-empty { padding: 24px 8px; font-size: 13px; color: var(--text-3); line-height: 1.6; }
+
+  /* Content */
+  .content { display: flex; flex-direction: column; min-width: 0; overflow-y: auto; padding: 20px; gap: 16px; }
+
+  .drop {
+    border: 1.5px dashed var(--line);
+    border-radius: 18px;
+    min-height: 180px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; text-align: center; padding: 28px 20px;
+    transition: border-color .15s, background .15s;
+  }
+  .drop.over { border-color: var(--accent); background: var(--fill); }
+  .drop-title { font-size: 15px; font-weight: 500; }
+  .drop-sub { font-size: 13px; color: var(--text-2); }
+  .drop button, .btn {
+    margin-top: 10px;
+    background: var(--accent); color: #fff; border: none;
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    padding: 7px 16px; border-radius: 999px; cursor: pointer;
+  }
+  .btn.secondary { background: var(--fill-hover); color: var(--text); }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .text-share { display: flex; gap: 8px; }
+  .text-share input {
+    flex: 1; min-width: 0;
+    font-family: var(--font); font-size: 13px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 999px; padding: 8px 14px; outline: none;
+  }
+  .text-share input:focus { border-color: var(--accent); }
+  .text-share .btn { margin-top: 0; }
+
+  .received-text {
+    display: none;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; font-size: 13px;
+  }
+  .received-text.show { display: block; }
+  .received-text .from { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+  .received-text .body { word-break: break-all; line-height: 1.55; }
+  .received-text .btn { margin-top: 8px; padding: 5px 12px; font-size: 12px; }
+
+  /* Transfers */
+  .transfers-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+  .transfers-head .section-label { padding: 0; }
+  .clear-btn { background: none; border: none; font-family: var(--font); font-size: 12px; color: var(--accent-text); cursor: pointer; padding: 0; }
+  .t-list { display: flex; flex-direction: column; }
+  .t-item { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  .t-item:last-child { border-bottom: none; }
+  .t-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+    background: var(--fill);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; color: var(--text-2); letter-spacing: .2px;
+    text-transform: uppercase;
+  }
+  .t-info { flex: 1; min-width: 0; }
+  .t-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-meta { font-size: 12px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-bar { height: 3px; border-radius: 2px; background: var(--fill-hover); margin-top: 6px; overflow: hidden; }
+  .t-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .2s; }
+  .t-status { font-size: 12px; color: var(--text-2); flex-shrink: 0; min-width: 44px; text-align: right; }
+  .t-status.done { color: #248a3d; }
+  .t-status.error { color: var(--red); }
+  @media (prefers-color-scheme: dark) { .t-status.done { color: var(--green); } }
+  .t-cancel {
+    background: none; border: none; cursor: pointer; flex-shrink: 0;
+    color: var(--text-3); font-size: 16px; line-height: 1; padding: 4px;
+  }
+  .t-empty { font-size: 13px; color: var(--text-3); padding: 6px 2px; }
+
+  /* Modal */
+  .modal-back {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.28);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-back.show { display: flex; }
+  .modal {
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-radius: 20px; box-shadow: var(--shadow);
+    width: 360px; max-width: 100%; padding: 24px 22px 18px;
+  }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .modal-sub { font-size: 13px; color: var(--text-2); margin-bottom: 14px; }
+  .modal-files { max-height: 180px; overflow-y: auto; margin-bottom: 16px; }
+  .modal-file { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 5px 0; }
+  .modal-file .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .modal-file .s { color: var(--text-3); flex-shrink: 0; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions .btn { flex: 1; margin-top: 0; padding: 9px; font-size: 14px; }
+
+  /* Toast */
+  #toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .toast {
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    color: var(--text); font-size: 13px;
+    padding: 9px 16px; border-radius: 999px;
+    animation: toast-in .25s ease;
+  }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+  footer { padding: 10px 20px; font-size: 12px; color: var(--text-3); border-top: 1px solid var(--line); flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="brand-name">LocalShare</span>
+    <span class="brand-sub">局域网文件传送</span>
+  </div>
+  <div class="header-right">
+    <div class="status"><span class="status-dot" id="status-dot"></span><span id="status-text">连接中</span></div>
+    <div class="me" id="me-chip" title="点击修改名字">
+      <div class="avatar" id="me-avatar">?</div>
+      <span class="me-name" id="me-name"></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="section-label">附近设备</div>
+    <div id="peer-list"></div>
+    <div class="peers-empty" id="peers-empty">正在等待其他设备。<br>在同一 Wi-Fi 的设备上打开本页，就会出现在这个列表里。</div>
+  </aside>
+
+  <div class="content">
+    <div class="drop" id="drop">
+      <div class="drop-title" id="drop-title">把文件拖到这里</div>
+      <div class="drop-sub" id="drop-sub">先在左侧选择一台设备</div>
+      <button id="pick-btn">选择文件</button>
+      <input type="file" id="file-input" multiple hidden>
+    </div>
+
+    <div class="text-share">
+      <input id="text-input" type="text" placeholder="发送文字或链接给所选设备" autocomplete="off">
+      <button class="btn secondary" id="text-send">发送</button>
+    </div>
+
+    <div class="received-text" id="received-text">
+      <div class="from" id="received-from"></div>
+      <div class="body" id="received-body"></div>
+      <button class="btn secondary" id="received-copy">复制</button>
+    </div>
+
+    <div>
+      <div class="transfers-head">
+        <span class="section-label">传输</span>
+        <button class="clear-btn" id="clear-done">清除已完成</button>
+      </div>
+      <div class="t-list" id="t-list">
+        <div class="t-empty">还没有传输记录。</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer id="footer">同一 Wi-Fi 下打开本页即可互传，文件在设备之间直连传输，不经过服务器。</footer>
+
+<div class="modal-back" id="modal-back">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">收到文件</div>
+    <div class="modal-sub" id="modal-sub"></div>
+    <div class="modal-files" id="modal-files"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="modal-reject">拒绝</button>
+      <button class="btn" id="modal-accept">接收</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+'use strict';
+
+/* ============ helpers ============ */
+const $ = (id) => document.getElementById(id);
+const CHUNK = 64 * 1024;
+const HIGH_WATER = 1024 * 1024;
+const LOW_WATER = 256 * 1024;
+
+function formatSize(n) {
+  if (!n && n !== 0) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 ** 2) return (n / 1024).toFixed(1) + ' KB';
+  if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB';
+  return (n / 1024 ** 3).toFixed(2) + ' GB';
+}
+function formatSpeed(n) { return formatSize(n) + '/s'; }
+function formatEta(sec) {
+  if (!isFinite(sec) || sec < 0) return '';
+  if (sec < 60) return '约 ' + Math.max(1, Math.round(sec)) + ' 秒';
+  return '约 ' + Math.round(sec / 60) + ' 分钟';
+}
+function fileExt(name) {
+  const m = /\.([A-Za-z0-9]{1,5})$/.exec(name || '');
+  return m ? m[1].toUpperCase() : 'FILE';
+}
+function toast(text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = text;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+const AVATAR_COLORS = ['#0071e3', '#34c759', '#ff9f0a', '#af52de', '#ff6482', '#64d2ff', '#30b0c7', '#a2845e'];
+function avatarColor(key) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function makeAvatar(key, name) {
+  const el = document.createElement('div');
+  el.className = 'avatar';
+  el.style.background = avatarColor(key);
+  el.textContent = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  return el;
+}
+async function sha256Hex(buf) {
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* ============ identity ============ */
+function detectDevice() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return { type: 'phone', label: 'iPhone' };
+  if (/iPad/.test(ua)) return { type: 'tablet', label: 'iPad' };
+  if (/Android/.test(ua)) return { type: 'phone', label: 'Android' };
+  if (/Macintosh/.test(ua)) return { type: 'desktop', label: 'Mac' };
+  if (/Windows/.test(ua)) return { type: 'desktop', label: 'Windows' };
+  if (/Linux/.test(ua)) return { type: 'desktop', label: 'Linux' };
+  return { type: 'desktop', label: '电脑' };
+}
+const device = detectDevice();
+let myName = localStorage.getItem('ls-name') || device.label;
+let myId = null;
+
+function renderMe() {
+  $('me-name').textContent = myName;
+  const av = $('me-avatar');
+  av.style.background = avatarColor('me' + myName);
+  av.textContent = myName.trim().charAt(0).toUpperCase() || '?';
+}
+$('me-chip').addEventListener('click', () => {
+  const next = prompt('给这台设备起个名字', myName);
+  if (next && next.trim()) {
+    myName = next.trim().slice(0, 40);
+    localStorage.setItem('ls-name', myName);
+    renderMe();
+    wsSend({ type: 'update-profile', name: myName });
+  }
+});
+renderMe();
+
+/* ============ state ============ */
+let ws = null;
+let wsBackoff = 1000;
+let peers = [];               // [{id, name, deviceType}]
+let selectedPeerId = null;
+const transfers = new Map();  // rowId -> row state
+const batchesOut = new Map(); // transferId -> outgoing batch
+const batchesIn = new Map();  // key -> incoming batch
+const pendingRequests = [];   // incoming requests awaiting the modal
+let modalCurrent = null;
+const receivedLog = [];       // {name, size, sha256} for verification
+
+/* ============ websocket ============ */
+function wsSend(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+function setStatus(mode, text) {
+  $('status-dot').className = 'status-dot' + (mode ? ' ' + mode : '');
+  $('status-text').textContent = text;
+}
+function connect() {
+  setStatus('wait', '连接中');
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(proto + '://' + location.host);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    wsBackoff = 1000;
+    wsSend({ type: 'register', name: myName, deviceType: device.type });
+  };
+  ws.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) { onRelayData(e.data); return; }
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    onControl(msg);
+  };
+  ws.onclose = () => {
+    setStatus('', '已断开');
+    myId = null;
+    setTimeout(connect, wsBackoff);
+    wsBackoff = Math.min(wsBackoff * 2, 10000);
+  };
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+setInterval(() => wsSend({ type: 'ping' }), 25000);
+
+function onControl(msg) {
+  switch (msg.type) {
+    case 'welcome':
+      myId = msg.id;
+      setStatus('on', '已连接');
+      break;
+    case 'peers':
+      peers = msg.peers.filter((p) => p.id !== myId);
+      if (selectedPeerId && !peers.some((p) => p.id === selectedPeerId)) selectPeer(null);
+      renderPeers();
+      break;
+    case 'signal':
+      onSignal(msg.from, msg.data);
+      break;
+    case 'send-request':
+      onSendRequest(msg);
+      break;
+    case 'send-accept': {
+      const b = batchesOut.get(msg.transferId);
+      if (b && b.state === 'waiting') { b.state = 'accepted'; b.onAccept && b.onAccept(); }
+      break;
+    }
+    case 'send-reject': {
+      const b = batchesOut.get(msg.transferId);
+      if (b) { b.state = 'rejected'; b.failAll('对方已拒绝'); toast('对方拒绝了接收'); }
+      break;
+    }
+    case 'send-cancel': {
+      cancelIncoming(msg.from, msg.transferId, true);
+      const b = batchesOut.get(msg.transferId);
+      if (b) { b.cancelled = true; b.failAll('对方已取消'); }
+      break;
+    }
+    case 'text':
+      showReceivedText(peerName(msg.from), msg.text);
+      break;
+  }
+}
+function peerName(id) {
+  const p = peers.find((x) => x.id === id);
+  return p ? p.name : '未知设备';
+}
+
+/* ============ peers UI ============ */
+function renderPeers() {
+  const list = $('peer-list');
+  list.textContent = '';
+  $('peers-empty').style.display = peers.length ? 'none' : 'block';
+  for (const p of peers) {
+    const row = document.createElement('div');
+    row.className = 'peer' + (p.id === selectedPeerId ? ' selected' : '');
+    row.appendChild(makeAvatar(p.id + p.name, p.name));
+    const info = document.createElement('div');
+    info.className = 'peer-info';
+    const nm = document.createElement('div');
+    nm.className = 'peer-name';
+    nm.textContent = p.name;
+    const meta = document.createElement('div');
+    meta.className = 'peer-meta';
+    meta.textContent = '在线';
+    info.append(nm, meta);
+    row.appendChild(info);
+    row.addEventListener('click', () => selectPeer(p.id));
+    row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drop-target'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drop-target');
+      if (e.dataTransfer.files.length) sendFiles(p.id, [...e.dataTransfer.files]);
+    });
+    list.appendChild(row);
+  }
+  updateDropHint();
+}
+function selectPeer(id) {
+  selectedPeerId = id;
+  renderPeers();
+}
+function updateDropHint() {
+  const p = peers.find((x) => x.id === selectedPeerId);
+  $('drop-title').textContent = p ? '把文件拖到这里' : '把文件拖到这里';
+  $('drop-sub').textContent = p ? '发送给 ' + p.name : '先在左侧选择一台设备';
+}
+
+/* ============ webrtc ============ */
+const rtcPeers = new Map(); // peerId -> {pc, dc, makingOffer, ignoreOffer}
+function getRtc(peerId) {
+  let entry = rtcPeers.get(peerId);
+  if (entry) return entry;
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  entry = { pc, dc: null, makingOffer: false, ignoreOffer: false };
+  rtcPeers.set(peerId, entry);
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) wsSend({ type: 'signal', to: peerId, data: { kind: 'ice', candidate: e.candidate.toJSON() } });
+  };
+  pc.onnegotiationneeded = async () => {
+    try {
+      entry.makingOffer = true;
+      await pc.setLocalDescription();
+      wsSend({ type: 'signal', to: peerId, data: { kind: 'offer', description: pc.localDescription.toJSON() } });
+    } catch {} finally { entry.makingOffer = false; }
+  };
+  pc.ondatachannel = (e) => attachChannel(peerId, e.channel);
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      rtcPeers.delete(peerId);
+    }
+  };
+  return entry;
+}
+function attachChannel(peerId, dc) {
+  const entry = getRtc(peerId);
+  entry.dc = dc;
+  dc.binaryType = 'arraybuffer';
+  dc.onmessage = (e) => onChannelData(peerId, e.data);
+  dc.onclose = () => { if (entry.dc === dc) entry.dc = null; };
+}
+async function ensureChannel(peerId, timeoutMs) {
+  const entry = getRtc(peerId);
+  if (entry.dc && entry.dc.readyState === 'open') return entry.dc;
+  if (!entry.dc) attachChannel(peerId, entry.pc.createDataChannel('ls'));
+  const dc = entry.dc;
+  if (dc.readyState === 'open') return dc;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('rtc-timeout')), timeoutMs);
+    dc.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+    dc.addEventListener('close', () => { clearTimeout(timer); reject(new Error('rtc-closed')); }, { once: true });
+  });
+  return dc;
+}
+async function onSignal(fromId, data) {
+  const entry = getRtc(fromId);
+  const pc = entry.pc;
+  try {
+    if (data.kind === 'offer') {
+      const polite = String(myId) < String(fromId);
+      const collision = entry.makingOffer || pc.signalingState !== 'stable';
+      entry.ignoreOffer = !polite && collision;
+      if (entry.ignoreOffer) return;
+      await pc.setRemoteDescription(data.description);
+      await pc.setLocalDescription();
+      wsSend({ type: 'signal', to: fromId, data: { kind: 'answer', description: pc.localDescription.toJSON() } });
+    } else if (data.kind === 'answer') {
+      await pc.setRemoteDescription(data.description);
+    } else if (data.kind === 'ice') {
+      try { await pc.addIceCandidate(data.candidate); } catch (e) { if (!entry.ignoreOffer) throw e; }
+    }
+  } catch { /* negotiation races resolve themselves on the next round */ }
+}
+
+/* ============ transfers: shared UI ============ */
+let rowSeq = 0;
+function addRow(fields) {
+  const row = {
+    rowId: 'r' + (++rowSeq),
+    direction: 'out', status: 'waiting', progress: 0,
+    speed: 0, doneBytes: 0, lastBytes: 0, lastTime: 0, lastRender: 0,
+    ...fields,
+  };
+  transfers.set(row.rowId, row);
+  renderTransfers();
+  return row;
+}
+function setRow(row, patch) {
+  Object.assign(row, patch);
+  const now = performance.now();
+  if (patch.progress !== undefined && now - row.lastRender < 150 && row.status === 'active') return;
+  row.lastRender = now;
+  renderTransfers();
+}
+function renderTransfers() {
+  const list = $('t-list');
+  list.textContent = '';
+  const rows = [...transfers.values()].reverse();
+  if (!rows.length) {
+    const d = document.createElement('div');
+    d.className = 't-empty';
+    d.textContent = '还没有传输记录。';
+    list.appendChild(d);
+    return;
+  }
+  for (const row of rows) {
+    const item = document.createElement('div');
+    item.className = 't-item';
+    const icon = document.createElement('div');
+    icon.className = 't-icon';
+    icon.textContent = fileExt(row.name);
+    const info = document.createElement('div');
+    info.className = 't-info';
+    const nm = document.createElement('div');
+    nm.className = 't-name';
+    nm.textContent = (row.direction === 'out' ? '↑ ' : '↓ ') + row.name;
+    const meta = document.createElement('div');
+    meta.className = 't-meta';
+    meta.textContent = rowMeta(row);
+    info.append(nm, meta);
+    if (row.status === 'active') {
+      const bar = document.createElement('div');
+      bar.className = 't-bar';
+      const fill = document.createElement('div');
+      fill.className = 't-fill';
+      fill.style.width = Math.round(row.progress * 100) + '%';
+      bar.appendChild(fill);
+      info.appendChild(bar);
+    }
+    const status = document.createElement('div');
+    status.className = 't-status' + (row.status === 'done' ? ' done' : (row.status === 'error' || row.status === 'rejected') ? ' error' : '');
+    status.textContent = rowStatusText(row);
+    item.append(icon, info, status);
+    if (row.status === 'active' || row.status === 'waiting') {
+      const btn = document.createElement('button');
+      btn.className = 't-cancel';
+      btn.textContent = '×';
+      btn.title = '取消';
+      btn.addEventListener('click', () => cancelRow(row));
+      item.appendChild(btn);
+    }
+    list.appendChild(item);
+  }
+}
+function rowMeta(row) {
+  const parts = [formatSize(row.size), row.peerLabel || ''];
+  if (row.status === 'active' && row.speed > 0) {
+    parts.push(formatSpeed(row.speed));
+    const remain = row.size - row.doneBytes;
+    if (remain > 0) parts.push(formatEta(remain / row.speed));
+  }
+  if (row.note) parts.push(row.note);
+  return parts.filter(Boolean).join(' · ');
+}
+function rowStatusText(row) {
+  switch (row.status) {
+    case 'waiting': return row.direction === 'out' ? '等确认' : '待接收';
+    case 'active': return Math.round(row.progress * 100) + '%';
+    case 'done': return '完成';
+    case 'rejected': return '已拒绝';
+    case 'cancelled': return '已取消';
+    case 'error': return '失败';
+    default: return row.status;
+  }
+}
+$('clear-done').addEventListener('click', () => {
+  for (const [k, v] of transfers) {
+    if (['done', 'rejected', 'cancelled', 'error'].includes(v.status)) transfers.delete(k);
+  }
+  renderTransfers();
+});
+function trackSpeed(row, doneBytes) {
+  const now = performance.now();
+  if (row.lastTime) {
+    const dt = (now - row.lastTime) / 1000;
+    if (dt >= 0.2) {
+      const inst = (doneBytes - row.lastBytes) / dt;
+      row.speed = row.speed ? row.speed * 0.6 + inst * 0.4 : inst;
+      row.lastTime = now;
+      row.lastBytes = doneBytes;
+    }
+  } else { row.lastTime = now; row.lastBytes = doneBytes; }
+  row.doneBytes = doneBytes;
+}
+function cancelRow(row) {
+  if (row.direction === 'out') {
+    const b = batchesOut.get(row.transferId);
+    if (b) { b.cancelled = true; wsSend({ type: 'send-cancel', to: b.peerId, transferId: b.transferId }); b.failAll('已取消', 'cancelled'); }
+  } else {
+    cancelIncoming(row.fromId, row.transferId, false);
+    wsSend({ type: 'send-cancel', to: row.fromId, transferId: row.transferId });
+  }
+}
+
+/* ============ sending ============ */
+function sendFiles(peerId, files) {
+  if (!files.length) return;
+  if (!myId) { toast('尚未连接服务器'); return; }
+  const transferId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const batch = {
+    transferId, peerId, files,
+    state: 'waiting', cancelled: false, transport: null,
+    rows: files.map((f) => addRow({
+      transferId, peerLabel: peerName(peerId), direction: 'out',
+      name: f.name, size: f.size,
+    })),
+    failAll(note, status) {
+      for (const r of this.rows) {
+        if (r.status === 'waiting' || r.status === 'active') setRow(r, { status: status || 'error', note });
+      }
+    },
+    onAccept: null,
+  };
+  batchesOut.set(transferId, batch);
+  wsSend({
+    type: 'send-request', to: peerId, transferId,
+    files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
+  });
+  setTimeout(() => {
+    if (batch.state === 'waiting') { batch.state = 'expired'; batch.failAll('对方未响应'); }
+  }, 120000);
+
+  batch.onAccept = async () => {
+    if (batch.cancelled) return;
+    let dc = null;
+    try { dc = await ensureChannel(peerId, 6000); } catch { dc = null; }
+    batch.transport = dc ? 'rtc' : 'relay';
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (batch.cancelled) throw new Error('cancelled');
+        await sendOneFile(batch, dc, i);
+      }
+      if (dc) dc.send(JSON.stringify({ kind: 'batch-end', transferId }));
+    } catch (e) {
+      if (!batch.cancelled) batch.failAll(e.message === 'channel-closed' ? '连接中断' : '发送失败');
+    }
+  };
+}
+
+async function sendOneFile(batch, dc, index) {
+  const file = batch.files[index];
+  const row = batch.rows[index];
+  setRow(row, { status: 'active', progress: 0, note: batch.transport === 'relay' ? '经服务器中转' : '' });
+  const onProgress = (sent) => {
+    trackSpeed(row, sent);
+    setRow(row, { progress: file.size ? sent / file.size : 1 });
+  };
+  if (dc) {
+    dc.send(JSON.stringify({ kind: 'file-start', transferId: batch.transferId, fileIndex: index, name: file.name, size: file.size, type: file.type }));
+    await pump((buf) => dc.send(buf), () => dc.bufferedAmount, (cb) => {
+      dc.bufferedAmountLowThreshold = LOW_WATER;
+      dc.addEventListener('bufferedamountlow', cb, { once: true });
+    }, file, onProgress, () => batch.cancelled || dc.readyState !== 'open');
+    dc.send(JSON.stringify({ kind: 'file-end', transferId: batch.transferId, fileIndex: index }));
+  } else {
+    sendRelayFrame(batch.peerId, { transferId: batch.transferId, fileIndex: index, kind: 'start', name: file.name, size: file.size, fileType: file.type }, null);
+    await pump((buf) => sendRelayFrame(batch.peerId, { transferId: batch.transferId, fileIndex: index, kind: 'chunk' }, buf),
+      () => ws.bufferedAmount, (cb) => setTimeout(cb, 60),
+      file, onProgress, () => batch.cancelled || !ws || ws.readyState !== WebSocket.OPEN);
+    sendRelayFrame(batch.peerId, { transferId: batch.transferId, fileIndex: index, kind: 'end' }, null);
+  }
+  setRow(row, { status: 'done', progress: 1 });
+}
+
+// Shared chunk pump with backpressure for both transports.
+async function pump(sendBuf, bufferedAmount, onLowWater, file, onProgress, isDead) {
+  let offset = 0;
+  while (offset < file.size) {
+    if (isDead()) throw new Error('channel-closed');
+    if (bufferedAmount() > HIGH_WATER) {
+      await new Promise((res) => { onLowWater(res); setTimeout(res, 300); });
+      continue;
+    }
+    const buf = await file.slice(offset, offset + CHUNK).arrayBuffer();
+    sendBuf(buf);
+    offset += buf.byteLength;
+    onProgress(offset);
+  }
+}
+
+function sendRelayFrame(to, header, payload) {
+  const headerBuf = new TextEncoder().encode(JSON.stringify({ to, ...header }));
+  const lenBuf = new ArrayBuffer(4);
+  new DataView(lenBuf).setUint32(0, headerBuf.length);
+  const body = payload ? new Uint8Array(payload) : new Uint8Array(0);
+  const out = new Uint8Array(4 + headerBuf.length + body.length);
+  out.set(new Uint8Array(lenBuf), 0);
+  out.set(headerBuf, 4);
+  out.set(body, 4 + headerBuf.length);
+  ws.send(out.buffer);
+}
+
+/* ============ receiving ============ */
+function onSendRequest(msg) {
+  pendingRequests.push(msg);
+  if (!modalCurrent) showNextRequest();
+}
+function showNextRequest() {
+  modalCurrent = pendingRequests.shift() || null;
+  if (!modalCurrent) { $('modal-back').classList.remove('show'); return; }
+  const msg = modalCurrent;
+  const total = msg.files.reduce((s, f) => s + f.size, 0);
+  $('modal-title').textContent = '收到文件';
+  $('modal-sub').textContent = '来自 ' + peerName(msg.from) + ' · ' + msg.files.length + ' 个文件 · 共 ' + formatSize(total);
+  const list = $('modal-files');
+  list.textContent = '';
+  for (const f of msg.files) {
+    const row = document.createElement('div');
+    row.className = 'modal-file';
+    const n = document.createElement('span');
+    n.className = 'n'; n.textContent = f.name;
+    const s = document.createElement('span');
+    s.className = 's'; s.textContent = formatSize(f.size);
+    row.append(n, s);
+    list.appendChild(row);
+  }
+  $('modal-back').classList.add('show');
+}
+$('modal-accept').addEventListener('click', () => {
+  const msg = modalCurrent;
+  if (!msg) return;
+  const key = msg.from + ':' + msg.transferId;
+  const batch = {
+    key, fromId: msg.from, transferId: msg.transferId,
+    files: msg.files, current: -1, parts: [], received: 0, rows: new Map(),
+  };
+  batchesIn.set(key, batch);
+  for (let i = 0; i < msg.files.length; i++) {
+    batch.rows.set(i, addRow({
+      transferId: msg.transferId, fromId: msg.from, peerLabel: peerName(msg.from),
+      direction: 'in', name: msg.files[i].name, size: msg.files[i].size, status: 'active',
+    }));
+  }
+  wsSend({ type: 'send-accept', to: msg.from, transferId: msg.transferId });
+  modalCurrent = null;
+  showNextRequest();
+});
+$('modal-reject').addEventListener('click', () => {
+  const msg = modalCurrent;
+  if (!msg) return;
+  wsSend({ type: 'send-reject', to: msg.from, transferId: msg.transferId });
+  modalCurrent = null;
+  showNextRequest();
+});
+
+function getInBatch(fromId, transferId) {
+  return batchesIn.get(fromId + ':' + transferId);
+}
+function inFileStart(batch, fileIndex, meta) {
+  batch.current = fileIndex;
+  batch.parts = [];
+  batch.received = 0;
+  if (meta) batch.files[fileIndex] = { ...batch.files[fileIndex], ...meta };
+}
+function inChunk(batch, buf) {
+  if (batch.current < 0) return;
+  batch.parts.push(buf);
+  batch.received += buf.byteLength;
+  const row = batch.rows.get(batch.current);
+  const meta = batch.files[batch.current];
+  if (row && meta) {
+    trackSpeed(row, batch.received);
+    setRow(row, { progress: meta.size ? batch.received / meta.size : 1 });
+  }
+}
+async function inFileEnd(batch, fileIndex) {
+  const meta = batch.files[fileIndex];
+  const row = batch.rows.get(fileIndex);
+  const blob = new Blob(batch.parts, { type: meta.type || 'application/octet-stream' });
+  batch.parts = [];
+  const buf = await blob.arrayBuffer();
+  receivedLog.push({ name: meta.name, size: blob.size, sha256: await sha256Hex(buf) });
+  const url = URL.createObjectURL(new Blob([buf], { type: meta.type || 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = meta.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  if (row) setRow(row, { status: 'done', progress: 1 });
+  toast('已收到 ' + meta.name);
+}
+function inBatchCleanup(batch) {
+  batchesIn.delete(batch.key);
+}
+function cancelIncoming(fromId, transferId, remote) {
+  const batch = getInBatch(fromId, transferId);
+  if (batch) {
+    for (const row of batch.rows.values()) {
+      if (row.status === 'active' || row.status === 'waiting') setRow(row, { status: 'cancelled', note: remote ? '对方已取消' : '已取消' });
+    }
+    inBatchCleanup(batch);
+  }
+  if (modalCurrent && modalCurrent.from === fromId && modalCurrent.transferId === transferId) {
+    modalCurrent = null;
+    showNextRequest();
+  }
+  for (let i = pendingRequests.length - 1; i >= 0; i--) {
+    if (pendingRequests[i].from === fromId && pendingRequests[i].transferId === transferId) pendingRequests.splice(i, 1);
+  }
+}
+
+function onChannelData(fromId, data) {
+  if (typeof data === 'string') {
+    let ctl;
+    try { ctl = JSON.parse(data); } catch { return; }
+    const batch = getInBatch(fromId, ctl.transferId);
+    if (!batch) return;
+    if (ctl.kind === 'file-start') inFileStart(batch, ctl.fileIndex, ctl);
+    else if (ctl.kind === 'file-end') inFileEnd(batch, ctl.fileIndex);
+    else if (ctl.kind === 'batch-end') inBatchCleanup(batch);
+    else if (ctl.kind === 'cancel') cancelIncoming(fromId, ctl.transferId, true);
+    return;
+  }
+  const batch = [...batchesIn.values()].find((b) => b.fromId === fromId && b.current >= 0);
+  if (batch) inChunk(batch, data);
+}
+
+function onRelayData(buf) {
+  const view = new DataView(buf);
+  const headerLen = view.getUint32(0);
+  let header;
+  try { header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, headerLen))); } catch { return; }
+  const batch = getInBatch(header.from, header.transferId);
+  if (!batch) return;
+  const payload = buf.slice(4 + headerLen);
+  if (header.kind === 'start') {
+    inFileStart(batch, header.fileIndex, { name: header.name, size: header.size, type: header.fileType });
+    const row = batch.rows.get(header.fileIndex);
+    if (row) setRow(row, { note: '经服务器中转' });
+  } else if (header.kind === 'chunk') inChunk(batch, payload);
+  else if (header.kind === 'end') inFileEnd(batch, header.fileIndex);
+}
+
+/* ============ picking & dropping ============ */
+$('pick-btn').addEventListener('click', () => {
+  if (!selectedPeerId) {
+    if (peers.length === 1) selectPeer(peers[0].id);
+    else { toast('先选择一台设备'); return; }
+  }
+  $('file-input').click();
+});
+$('file-input').addEventListener('change', (e) => {
+  if (e.target.files.length && selectedPeerId) sendFiles(selectedPeerId, [...e.target.files]);
+  e.target.value = '';
+});
+const dropEl = $('drop');
+dropEl.addEventListener('dragover', (e) => { e.preventDefault(); dropEl.classList.add('over'); });
+dropEl.addEventListener('dragleave', () => dropEl.classList.remove('over'));
+dropEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropEl.classList.remove('over');
+  if (!e.dataTransfer.files.length) return;
+  if (!selectedPeerId) {
+    if (peers.length === 1) selectPeer(peers[0].id);
+    else { toast('先选择一台设备'); return; }
+  }
+  sendFiles(selectedPeerId, [...e.dataTransfer.files]);
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
+
+/* ============ text share ============ */
+function sendText() {
+  const input = $('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!selectedPeerId) { toast('先选择一台设备'); return; }
+  wsSend({ type: 'text', to: selectedPeerId, text });
+  input.value = '';
+  toast('文字已发送');
+}
+$('text-send').addEventListener('click', sendText);
+$('text-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+function showReceivedText(fromName, text) {
+  $('received-from').textContent = '来自 ' + fromName + ' 的文字';
+  $('received-body').textContent = text;
+  $('received-text').classList.add('show');
+  toast('收到一条文字');
+}
+$('received-copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('received-body').textContent); toast('已复制'); } catch { toast('复制失败'); }
+});
+
+/* ============ footer hint ============ */
+fetch('/api/info').then((r) => r.json()).then((info) => {
+  if (info.ips && info.ips.length) {
+    $('footer').textContent = '在其他设备打开 http://' + info.ips[0] + ':' + info.port + ' 即可加入。文件在设备之间直连传输，不经过服务器。';
+  }
+}).catch(() => {});
+
+/* ============ boot ============ */
+connect();
+
+// Verification hook (used by automated end-to-end checks).
+window.__ls = {
+  version: '2.0.0',
+  state: () => ({
+    myId,
+    peers: peers.map((p) => ({ id: p.id, name: p.name })),
+    received: receivedLog,
+    transfers: [...transfers.values()].map((r) => ({ name: r.name, direction: r.direction, status: r.status, size: r.size, note: r.note || '' })),
+  }),
+};
+</script>
+</body>
+</html>
